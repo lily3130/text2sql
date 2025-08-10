@@ -1,0 +1,35 @@
+name: Build & Deploy backend (Dockerfile → GHCR → Azure Web App)
+
+on:
+  push:
+    branches: [ "main" ]
+
+env:
+  IMAGE: ghcr.io/lily3130/text2sql-backend:latest
+  CONTEXT: text2sql-backend
+  DOCKERFILE: text2sql-backend/Dockerfile
+  WEBAPP_NAME: text2sql  # 例如 text2sql
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Login to GHCR
+        run: echo "${{ secrets.CR_PAT }}" | docker login ghcr.io -u lily3130 --password-stdin
+
+      - name: Build Docker image
+        run: docker build -t "$IMAGE" -f "$DOCKERFILE" "$CONTEXT"
+
+      - name: Push image to GHCR
+        run: docker push "$IMAGE"
+
+      - name: Deploy container to Azure Web App
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.WEBAPP_NAME }}
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          images: ${{ env.IMAGE }}
