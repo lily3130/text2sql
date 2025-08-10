@@ -38,6 +38,7 @@ jobs:
           context: ./text2sql-backend
           file: ./text2sql-backend/Dockerfile
           push: true
+          no-cache: true
           tags: |
             ${{ env.IMAGE }}:latest
             ${{ env.IMAGE }}:${{ github.sha }}
