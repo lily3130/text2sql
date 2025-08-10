@@ -123,3 +123,6 @@ def ask(body: AskIn):
     except Exception as e:
         # 其他錯誤用 ok=False 回前端
         return {"ok": False, "error": str(e)}
+
+
+# test
