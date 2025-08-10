@@ -1,0 +1,133 @@
+/* ===== Base ===== */
+:root {
+  --bg: #0f1115;
+  --panel: #181b22;
+  --panel-2: #1f2430;
+  --text: #e6e6e6;
+  --muted: #9aa3af;
+  --border: rgba(255,255,255,0.12);
+  --shadow: 0 6px 30px rgba(0,0,0,0.4);
+  --radius: 16px;
+}
+
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Liberation Sans', "Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol","Noto Color Emoji";
+}
+
+.page {
+  max-width: 1200px;
+  margin: 40px auto;
+  padding: 0 20px 80px;
+}
+
+/* ===== Typography ===== */
+h1 { font-size: 32px; margin: 0 0 6px; }
+h3 { margin: 0 0 12px; font-size: 20px; }
+.muted { color: var(--muted); }
+
+/* ===== Cards / layout ===== */
+.card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  box-shadow: var(--shadow);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); /* <= 關鍵 */
+  gap: 20px;
+  align-items: start;
+}
+
+@media (max-width: 960px) {
+  .grid {
+    grid-template-columns: 1fr; /* 小螢幕改直排 */
+  }
+}
+
+/* ===== Form ===== */
+textarea {
+  width: 100%;
+  resize: vertical;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  font-size: 14px;
+  min-height: 90px;
+  outline: none;
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+button {
+  border: 1px solid var(--border);
+  background: #2a3140;
+  color: var(--text);
+  padding: 10px 14px;
+  border-radius: 12px;
+  cursor: pointer;
+}
+button:disabled {
+  opacity: .6;
+  cursor: not-allowed;
+}
+button:hover:not(:disabled) {
+  background: #343c50;
+}
+
+/* ===== Messages ===== */
+.error {
+  margin-top: 10px;
+  color: #ff7b7b;
+}
+
+/* ===== Code blocks ===== */
+pre, code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 13px;
+}
+pre {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  overflow: auto;
+}
+
+/* ===== Table ===== */
+.table-wrap { overflow-x: auto; margin-top: 16px; }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+thead tr { background: rgba(255,255,255,0.06); }
+th, td {
+  border: 1px solid var(--border);
+  padding: 8px 10px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+/* ===== Chart helpers (optional) ===== */
+.card svg { display: block; max-width: 100%; height: auto; }
+
+.card pre {
+  white-space: pre-wrap;      /* 自動換行 */
+  overflow-wrap: anywhere;    /* 需要時斷字 */
+  max-width: 100%;
+}

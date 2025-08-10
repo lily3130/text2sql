@@ -1,0 +1,28 @@
+# --- frontend (Vite/Node)
+node_modules/
+dist/
+.vite/
+.cache/
+
+# --- backend (Python)
+.venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+
+# --- env files (非常重要)
+.env
+.env.*
+!.env.example
+text2sql-frontend/.env
+text2sql-frontend/.env.*
+!text2sql-frontend/.env.example
+text2sql-backend/.env
+text2sql-backend/.env.*
+!text2sql-backend/.env.example
+
+# --- OS / misc
+.DS_Store
+Thumbs.db
+*.log

@@ -1,0 +1,97 @@
+:root {
+  --bg: #0b0c10;
+  --panel: #14161a;
+  --text: #eaf0f6;
+  --muted: #98a2b3;
+  --primary: #7c93ff;
+  --border: #1f2430;
+  --green: #16c47f;
+  --red: #ff6b6b;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  --round: 14px;
+}
+
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; }
+body {
+  margin: 0;
+  background: radial-gradient(1200px 600px at 80% -10%, #1d2030 0%, transparent 60%) var(--bg);
+  color: var(--text);
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+}
+
+.page {
+  max-width: 900px;
+  margin: 32px auto;
+  padding: 0 20px 40px;
+}
+
+header h1 { margin: 0 0 6px; letter-spacing: .2px; }
+.muted { color: var(--muted); }
+
+.card {
+  background: linear-gradient(180deg, #161821, #12141a);
+  border: 1px solid var(--border);
+  border-radius: var(--round);
+  padding: 16px;
+  margin-top: 16px;
+  box-shadow: 0 6px 20px rgba(0,0,0,.35);
+}
+
+label { display: block; margin-bottom: 8px; color: var(--muted); font-size: 14px; }
+textarea {
+  width: 100%;
+  resize: vertical;
+  background: #0e1016;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  outline: none;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.actions { margin-top: 12px; display: flex; gap: 8px; }
+button {
+  background: linear-gradient(180deg, #7c93ff, #6278ff);
+  color: white;
+  border: 0;
+  border-radius: 12px;
+  padding: 10px 16px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(94, 113, 255, .35);
+}
+button:disabled { opacity: .7; cursor: wait; }
+
+.error {
+  margin-top: 10px;
+  color: var(--red);
+  font-size: 14px;
+}
+
+pre {
+  background: #0e1016;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  overflow: auto;
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: 1fr;
+  margin-top: 12px;
+}
+@media (min-width: 820px) {
+  .grid { grid-template-columns: 1fr 1fr; }
+}
+
+footer { margin-top: 24px; }
+code { background: #0e1016; padding: 3px 6px; border-radius: 6px; border: 1px solid var(--border); }
