@@ -30,7 +30,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}          # ← 用觸發 workflow 的帳號登入
-          password: ${{ secrets.GITHUB_TOKEN }}  # ← 需有 packages:write
+          password: ${{ secrets.GHCR_TOKEN }}  # ← 需有 packages:write
 
       - name: Build and Push
         uses: docker/build-push-action@v5
