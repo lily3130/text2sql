@@ -13,7 +13,7 @@ permissions:
   packages: write
 
 env:
-  IMAGE: ghcr.io/lily3130/text2sql-backend
+  IMAGE: ghcr.io/lily3130/text2sql-backend   # ← 固定到你的帳號
 
 jobs:
   build-and-push:
@@ -29,8 +29,8 @@ jobs:
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          username: ${{ github.actor }}          # ← 用觸發 workflow 的帳號登入
+          password: ${{ secrets.GITHUB_TOKEN }}  # ← 需有 packages:write
 
       - name: Build and Push
         uses: docker/build-push-action@v5
