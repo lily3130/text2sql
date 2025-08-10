@@ -1,35 +1,46 @@
-name: Build & Deploy backend (Dockerfile → GHCR → Azure Web App)
+name: Build & Push backend to GHCR
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ main ]
+    paths:
+      - "text2sql-backend/**"
+      - ".github/workflows/deploy-backend.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
 
 env:
-  IMAGE: ghcr.io/lily3130/text2sql-backend:latest
-  CONTEXT: text2sql-backend
-  DOCKERFILE: text2sql-backend/Dockerfile
-  WEBAPP_NAME: text2sql  # 例如 text2sql
+  IMAGE: ghcr.io/${{ github.repository_owner }}/text2sql-backend
 
 jobs:
-  build-and-deploy:
+  build-and-push:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Login to GHCR
-        run: echo "${{ secrets.CR_PAT }}" | docker login ghcr.io -u lily3130 --password-stdin
-
-      - name: Build Docker image
-        run: docker build -t "$IMAGE" -f "$DOCKERFILE" "$CONTEXT"
-
-      - name: Push image to GHCR
-        run: docker push "$IMAGE"
-
-      - name: Deploy container to Azure Web App
-        uses: azure/webapps-deploy@v3
+        uses: docker/login-action@v3
         with:
-          app-name: ${{ env.WEBAPP_NAME }}
-          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-          images: ${{ env.IMAGE }}
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and Push
+        uses: docker/build-push-action@v5
+        with:
+          context: ./text2sql-backend
+          file: ./text2sql-backend/Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:latest
+            ${{ env.IMAGE }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
