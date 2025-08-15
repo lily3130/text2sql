@@ -27,29 +27,38 @@ export default function App() {
 
     setLoading(true);
     try {
+      // 先把 whitelist 轉陣列
       const wl = (tableWhitelist || '')
-      .split(',')
-      .map(s => s.trim())
-      .filter(Boolean);
-      
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean);
+
+      // 後端期望的頂層 JSON
       const payload = {
-      query,
-      use_enrichment: useEnrichment,
-      ...(wl.length ? { table_whitelist: wl } : {})   // 只在非空時帶入，且型別是 array
+        query: query.trim(),
+        use_enrichment: !!useEnrichment,
+        ...(wl.length ? { table_whitelist: wl } : {}),
       };
 
       const res = await fetch(`${API_BASE}/ask`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({payload}),
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify(payload),   // <— 這裡改了！
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.detail || data?.error || `HTTP ${res.status}`);
-      if (!data.ok) throw new Error(data?.error || 'Backend returned ok=false');
+
+      // 友善錯誤訊息（含 422 的 detail）
+      const text = await res.text();
+      let data; try { data = JSON.parse(text); } catch {}
+      if (!res.ok || data?.ok === false) {
+        const msg = Array.isArray(data?.detail)
+          ? data.detail.map(d => `${d.msg}${d.loc ? ` @ ${d.loc.join('.')}` : ''}`).join('; ')
+          : (data?.detail || data?.error || `HTTP ${res.status} ${text.slice(0,200)}`);
+        throw new Error(msg);
+      }
 
       setSql(data.sql || '');
       const cols = Array.isArray(data.columns) ? data.columns : [];
-      const rs = Array.isArray(data.rows) ? data.rows : [];
+      const rs   = Array.isArray(data.rows) ? data.rows : [];
       setColumns(cols);
       setRows(rs);
 
@@ -57,11 +66,9 @@ export default function App() {
         const labelKey = cols[0];
         const valueKey = cols.find(c => typeof rs[0]?.[c] === 'number') || cols[1];
         const top = rs.slice().sort((a,b)=> (Number(b?.[valueKey])||0)-(Number(a?.[valueKey])||0))
-                       .slice(0, Math.min(3, rs.length));
-        setSummary(
-          `Top ${top.length} by ${valueKey}: ` +
-          top.map(r => `${r[labelKey]} (${r[valueKey]})`).join(', ') + '.'
-        );
+                      .slice(0, Math.min(3, rs.length));
+        setSummary(`Top ${top.length} by ${valueKey}: ` +
+          top.map(r => `${r[labelKey]} (${r[valueKey]})`).join(', ') + '.');
       } else {
         setSummary('No rows returned.');
       }
