@@ -27,6 +27,11 @@ export default function App() {
 
     setLoading(true);
     try {
+      const wl = (tableWhitelist || '')
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean);
+      
       const payload = {
       query,
       use_enrichment: useEnrichment,
