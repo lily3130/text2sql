@@ -12,6 +12,7 @@ from sqlalchemy.engine import Engine
 from fastapi import HTTPException
 from langchain.chains import create_sql_query_chain
 from typing import Optional, Literal, List, Dict, Any
+import pandas as pd
 
 
 def strip_sql_code_fences(s: str) -> str:

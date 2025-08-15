@@ -28,15 +28,10 @@ export default function App() {
     setLoading(true);
     try {
       const payload = {
-        query,
-        use_enrichment: useEnrichment,
+      query,
+      use_enrichment: useEnrichment,
+      ...(wl.length ? { table_whitelist: wl } : {})   // 只在非空時帶入，且型別是 array
       };
-
-      const wl = tableWhitelist
-        .split(',')
-        .map(s => s.trim())
-        .filter(Boolean);
-      if (wl.length) payload.table_whitelist = wl;
 
       const res = await fetch(`${API_BASE}/ask`, {
         method: 'POST',
