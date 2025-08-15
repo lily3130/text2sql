@@ -65,11 +65,11 @@ app = FastAPI(title="Text-to-SQL API")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        # "http://localhost:5173",
-        # "https://text2sqlfrontendstorage.z23.web.core.windows.net/",
-        "*"
+        "http://localhost:5173",
+        "https://text2sqlfrontendstorage.z23.web.core.windows.net/",
+        # "*"
     ],  # 開發期可先 *
-    allow_credentials=False,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
