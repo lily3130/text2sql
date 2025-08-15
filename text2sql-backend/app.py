@@ -1,21 +1,17 @@
 # app.py
-import os, urllib
+import os, re, io, urllib
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from sqlalchemy import create_engine
 from langchain_openai import ChatOpenAI
 from langchain_experimental.sql import SQLDatabaseChain
 from langchain.sql_database import SQLDatabase
 from fastapi.middleware.cors import CORSMiddleware
-import re
-from sqlalchemy import text
+from sqlalchemy import text, create_engine
+from sqlalchemy.engine import Engine
 from fastapi import HTTPException
 from langchain.chains import create_sql_query_chain
-
-# app.py (最上方 imports 旁邊)
-import re
-from sqlalchemy import text
+from typing import Optional, Literal, List, Dict, Any
 
 
 def strip_sql_code_fences(s: str) -> str:
@@ -79,6 +75,149 @@ app.add_middleware(
 
 class AskIn(BaseModel):
     query: str
+    use_enrichment: bool = False  # 前端切換 Text Enrichment
+    table_whitelist: Optional[List[str]] = None  # 可選：限制可用表
+
+
+# ------------------- Schema/Glossary helpers -------------------
+def get_schema_snapshot(conn) -> Dict[str, List[str]]:
+    """
+    讀取 INFORMATION_SCHEMA，回傳 {table: [columns...]}
+    """
+    q = """
+    SELECT TABLE_NAME, COLUMN_NAME
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_CATALOG = :db
+    ORDER BY TABLE_NAME, ORDINAL_POSITION
+    """
+    rows = conn.execute(text(q), {"db": SQL_DB}).fetchall()
+    schema: Dict[str, List[str]] = {}
+    for t, c in rows:
+        schema.setdefault(t, []).append(c)
+    return schema
+
+
+def load_business_glossary(conn) -> List[Dict[str, Any]]:
+    """
+    嘗試讀取 BUSINESS_GLOSSARY(term, synonyms, columns)（可選）
+    synonyms/columns 建議用逗號分隔字串或 JSON；這裡通用處理
+    """
+    try:
+        rows = conn.execute(
+            text("SELECT term, synonyms, columns FROM BUSINESS_GLOSSARY")
+        ).fetchall()
+    except Exception:
+        return []
+    items = []
+    for r in rows:
+        term = r[0]
+        synonyms = r[1]
+        cols = r[2]
+
+        def to_list(v):
+            if v is None:
+                return []
+            s = str(v).strip()
+            if s.startswith("[") and s.endswith("]"):
+                # 粗略處理 JSON 風；不嚴格解析避免引入 json 依賴
+                s = s.strip("[]")
+                parts = [x.strip().strip("'\"") for x in s.split(",") if x.strip()]
+                return parts
+            return [x.strip() for x in s.split(",") if x.strip()]
+
+        items.append(
+            {
+                "term": term,
+                "synonyms": to_list(synonyms),
+                "columns": to_list(cols),
+            }
+        )
+    return items
+
+
+def build_enrichment_prompt(
+    question: str,
+    schema: Dict[str, List[str]],
+    glossary: List[Dict[str, Any]],
+    table_whitelist: Optional[List[str]],
+) -> str:
+    """
+    產生一段系統化的 prompt，請 LLM 回傳 enriched user question 與映射
+    """
+    # 過濾 schema（若有白名單）
+    if table_whitelist:
+        schema = {t: cols for t, cols in schema.items() if t in set(table_whitelist)}
+
+    schema_lines = []
+    for t, cols in schema.items():
+        schema_lines.append(
+            f"- {t}({', '.join(cols[:60])}{'...' if len(cols)>60 else ''})"
+        )
+
+    glossary_lines = []
+    for item in glossary:
+        glossary_lines.append(
+            f"- {item['term']} -> synonyms: {', '.join(item['synonyms']) or '(none)'}; columns: {', '.join(item['columns']) or '(unspecified)'}"
+        )
+
+    prompt = f"""
+You are a SQL text enrichment assistant.
+Task:
+1) Map ambiguous business terms to concrete table.column where possible.
+2) Expand the user question with synonyms and explicit filters (units, date grain).
+3) Keep *facts* untouched; do not invent tables/columns that don't exist in schema.
+4) Return STRICT JSON with keys: enriched_question, term_mappings (list of {{term, mapped_to}}), assumptions (list), filters (list).
+
+User question:
+{question}
+
+Schema (tables and columns):
+{os.linesep.join(schema_lines) if schema_lines else '(empty)'}
+
+Business glossary (optional):
+{os.linesep.join(glossary_lines) if glossary_lines else '(none)'}
+"""
+    return prompt
+
+
+def enrich_question_with_llm(
+    question: str, engine: Engine, table_whitelist: Optional[List[str]]
+) -> Dict[str, Any]:
+    """
+    回傳 { enriched_question: str, debug: {...} }
+    """
+    with engine.connect() as conn:
+        schema = get_schema_snapshot(conn)
+        glossary = load_business_glossary(conn)
+
+    prompt = build_enrichment_prompt(question, schema, glossary, table_whitelist)
+    # 讓回傳更穩定：要求 JSON
+    sys_msg = "Answer in JSON only. No extra commentary."
+    resp = llm.invoke(
+        [{"role": "system", "content": sys_msg}, {"role": "user", "content": prompt}]
+    )
+
+    content = (resp.content or "").strip()
+
+    # 嘗試解析 JSON；若失敗則退回原始問題（不會阻塞整體流程）
+    import json
+
+    enriched_question = question
+    debug: Dict[str, Any] = {}
+    try:
+        data = json.loads(content)
+        if isinstance(data, dict) and "enriched_question" in data:
+            enriched_question = data["enriched_question"] or question
+            debug = {
+                "term_mappings": data.get("term_mappings", []),
+                "assumptions": data.get("assumptions", []),
+                "filters": data.get("filters", []),
+                "raw": data,
+            }
+    except Exception:
+        debug = {"parse_error": True, "raw": content}
+
+    return {"enriched_question": enriched_question, "debug": debug}
 
 
 @app.get("/health")
@@ -93,35 +232,133 @@ def ask(body: AskIn):
         if not question:
             raise HTTPException(status_code=400, detail="query must not be empty")
 
-        # 只產生 SQL（不直接執行）
+        # 1) 可選的 Text Enrichment
+        debug_enrich = None
+        if body.use_enrichment:
+            enriched = enrich_question_with_llm(question, engine, body.table_whitelist)
+            question = enriched["enriched_question"] or question
+            debug_enrich = enriched["debug"]
+
+        # 2) 產生 SQL（不直接執行）
         sql_chain = create_sql_query_chain(llm, db)
         raw_sql = sql_chain.invoke({"question": question})
         sql = strip_sql_code_fences(raw_sql)
 
-        # 簡單阻擋破壞性語句（可依需要再放寬/調整）
-        lowered = sql.lower()
+        # 3) 簡單阻擋破壞性語句
+        lowered = f" {sql.lower()} "
         if any(
-            bad in lowered for bad in (" drop ", " delete ", " truncate ", " alter ")
+            bad in lowered
+            for bad in (" drop ", " delete ", " truncate ", " alter ", " update ")
         ):
             raise HTTPException(
                 status_code=400,
                 detail=f"Refusing to execute potentially destructive SQL: {sql}",
             )
 
-        # 實際執行 SQL
+        # 4) 執行查詢
         with engine.connect() as conn:
             result = conn.execute(text(sql))
             columns = list(result.keys())
             rows = [dict(r._mapping) for r in result]
 
-        return {"ok": True, "sql": sql, "columns": columns, "rows": rows}
+        return {
+            "ok": True,
+            "sql": sql,
+            "columns": columns,
+            "rows": rows,
+            "enrichment": debug_enrich if body.use_enrichment else None,
+        }
 
     except HTTPException:
-        # 讓 FastAPI 正常回傳 HTTP 錯誤碼
         raise
     except Exception as e:
-        # 其他錯誤用 ok=False 回前端
         return {"ok": False, "error": str(e)}
 
 
-# test
+# ------------------- File Upload → Azure SQL -------------------
+# 需求：
+#   pip 安裝 python-multipart、pandas、openpyxl（處理 xlsx）
+# 參數：
+#   file: CSV 或 Excel
+#   table_name: 可選；若未提供，預設用檔名
+#   if_exists: 'fail' | 'replace' | 'append'（預設 replace）
+#   sheet_name: 讀 Excel 時可選（不填則全部 sheet）
+def sanitize_identifier(name: str) -> str:
+    name = name.strip()
+    name = re.sub(r"[^\w]+", "_", name)
+    name = re.sub(r"(^_+|_+$)", "", name)
+    if not name:
+        name = "uploaded_table"
+    return name
+
+
+@app.post("/upload")
+async def upload_file(
+    file: UploadFile = File(...),
+    table_name: Optional[str] = Form(None),
+    if_exists: Literal["fail", "replace", "append"] = Form("replace"),
+    sheet_name: Optional[str] = Form(None),  # 只對 Excel 有效；可指定單一 sheet
+):
+    try:
+        filename = file.filename or "upload"
+        ext = filename.lower().split(".")[-1]
+        content = await file.read()
+        bio = io.BytesIO(content)
+
+        # 讀檔到 DataFrame(s)
+        dfs: Dict[str, pd.DataFrame] = {}
+
+        if ext in ("csv", "txt"):
+            df = pd.read_csv(bio)
+            dfs[table_name or sanitize_identifier(filename.rsplit(".", 1)[0])] = df
+        elif ext in ("xlsx", "xls"):
+            xls = pd.ExcelFile(bio)
+            target_sheets = xls.sheet_names if not sheet_name else [sheet_name]
+            for sh in target_sheets:
+                if "content" in sh.lower():
+                    # 跟你線下邏輯一致：跳過非資料 sheet
+                    continue
+                df = pd.read_excel(xls, sheet_name=sh)
+                dfs[sanitize_identifier(sh)] = df
+        else:
+            raise HTTPException(
+                status_code=400, detail="Only CSV/XLSX/XLS are supported"
+            )
+
+        # 欄名清理 + 寫入 SQL
+        total_tables, total_rows = 0, 0
+        with engine.begin() as conn:  # begin(): 自動交易處理
+            for tname, df in dfs.items():
+                t_final = sanitize_identifier(table_name) if table_name else tname
+                df.columns = (
+                    df.columns.astype(str)
+                    .str.strip()
+                    .str.replace(r"[^\w]+", "_", regex=True)
+                    .str.replace(r"(^_+|_+$)", "", regex=True)
+                )
+                df.to_sql(
+                    t_final,
+                    conn,
+                    if_exists=if_exists,
+                    index=False,
+                    chunksize=1000,
+                    method="multi",
+                )
+                total_tables += 1
+                total_rows += len(df)
+
+        return {
+            "ok": True,
+            "message": f"Imported {total_tables} table(s), {total_rows} row(s).",
+            "tables": (
+                list(dfs.keys())
+                if not table_name
+                else [sanitize_identifier(table_name)]
+            ),
+            "if_exists": if_exists,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

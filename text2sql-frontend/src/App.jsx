@@ -2,11 +2,14 @@ import { useState } from 'react';
 import QueryForm from './components/QueryForm';
 import ResultPanel from './components/ResultPanel';
 import SqlPanel from './components/SqlPanel';
+import UploadPanel from './components/UploadPanel';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL;
 
 export default function App() {
   const [query, setQuery] = useState('');
+  const [useEnrichment, setUseEnrichment] = useState(false);
+  const [tableWhitelist, setTableWhitelist] = useState(''); // 逗號分隔的表名
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
   const [columns, setColumns] = useState([]);
@@ -24,10 +27,21 @@ export default function App() {
 
     setLoading(true);
     try {
+      const payload = {
+        query,
+        use_enrichment: useEnrichment,
+      };
+
+      const wl = tableWhitelist
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean);
+      if (wl.length) payload.table_whitelist = wl;
+
       const res = await fetch(`${API_BASE}/ask`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query }),
+        body: JSON.stringify({payload}),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.detail || data?.error || `HTTP ${res.status}`);
@@ -62,16 +76,22 @@ export default function App() {
     <div className="page">
       <header>
         <h1>Text-to-SQL</h1>
-        <p className="muted">Ask a question in natural language. I’ll query your Azure SQL DB.</p>
+        <p className="muted">I'm your text-to-SQL agent. Ask me a question!</p>
       </header>
 
       <QueryForm
         query={query}
         setQuery={setQuery}
+        useEnrichment={useEnrichment}
+        setUseEnrichment={setUseEnrichment}
+        tableWhitelist={tableWhitelist}
+        setTableWhitelist={setTableWhitelist}
         loading={loading}
         error={err}
         onSubmit={onSubmit}
       />
+
+      <UploadPanel apiBase={API_BASE} />
 
       {(rows.length || sql) && (
         <section className="grid">

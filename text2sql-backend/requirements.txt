@@ -6,3 +6,6 @@ langchain==0.2.7
 langchain-openai==0.1.14
 langchain-experimental==0.0.62
 gunicorn
+openpyxl
+python-multipart
+pandas
