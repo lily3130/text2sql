@@ -410,6 +410,20 @@ async def upload_file(
                     .str.replace(r"[^\w]+", "_", regex=True)
                     .str.replace(r"(^_+|_+$)", "", regex=True)
                 )
+                CANON = {
+                    "eimh_year": "year",
+                    "yr": "year",
+                    # 可視需要擴充：kwh_per_acc/kwh_per_account、number_of_electricity_accounts 等
+                }
+                rename_map = {}
+                for c in list(df.columns):
+                    key = c.lower()
+                    if key in CANON:
+                        rename_map[c] = CANON[key]
+                    elif re.search(r"(?:^|_)year(?:_|$)", key):  # 任何含 year 的名稱
+                        rename_map[c] = "year"
+
+                df.rename(columns=rename_map, inplace=True)
                 df.to_sql(
                     t_final,
                     conn,
