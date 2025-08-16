@@ -315,6 +315,9 @@ def ask(body: AskIn):
         raw_sql = sql_chain.invoke({"question": question})
         sql = strip_sql_code_fences(raw_sql)
 
+        # 把 LIMIT/反引號 轉成 SQL Server 可用語法
+        sql = normalize_sql_for_mssql(sql)
+
         # 3) 簡單阻擋破壞性語句
         lowered = f" {sql.lower()} "
         if any(
