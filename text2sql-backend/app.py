@@ -29,6 +29,72 @@ def strip_sql_code_fences(s: str) -> str:
     return s.strip()
 
 
+def normalize_sql_for_mssql(sql: str) -> str:
+    """
+    - LIMIT n OFFSET m   -> OFFSET m ROWS FETCH NEXT n ROWS ONLY (需已有 ORDER BY，否則退回 TOP n)
+    - LIMIT m, n         -> OFFSET m ROWS FETCH NEXT n ROWS ONLY (同上)
+    - LIMIT n            -> 在 SELECT 後注入 TOP n
+    - `identifier`       -> [identifier]
+    """
+    if not isinstance(sql, str):
+        return sql
+    s = sql.strip().rstrip(";")
+
+    def has_order_by(x: str) -> bool:
+        return re.search(r"\border\s+by\b", x, flags=re.I) is not None
+
+    # 1) LIMIT n OFFSET m
+    m = re.search(r"\blimit\s+(\d+)\s+offset\s+(\d+)\b", s, flags=re.I)
+    if m:
+        n = int(m.group(1))
+        off = int(m.group(2))
+        if has_order_by(s):
+            s = re.sub(
+                r"\blimit\s+\d+\s+offset\s+\d+\b",
+                f"OFFSET {off} ROWS FETCH NEXT {n} ROWS ONLY",
+                s,
+                flags=re.I,
+            )
+        else:
+            # 沒有 ORDER BY 時，OFFSET 不合法：退回 TOP n
+            s = re.sub(r"\blimit\s+\d+\s+offset\s+\d+\b", "", s, flags=re.I)
+            s = re.sub(r"^\s*select\s+", f"SELECT TOP {n} ", s, flags=re.I)
+        # 反引號 -> 中括號
+        s = re.sub(r"`([^`]+)`", r"[\1]", s)
+        return s
+
+    # 2) LIMIT m, n
+    m = re.search(r"\blimit\s+(\d+)\s*,\s*(\d+)\b", s, flags=re.I)
+    if m:
+        off = int(m.group(1))
+        n = int(m.group(2))
+        if has_order_by(s):
+            s = re.sub(
+                r"\blimit\s+\d+\s*,\s*\d+\b",
+                f"OFFSET {off} ROWS FETCH NEXT {n} ROWS ONLY",
+                s,
+                flags=re.I,
+            )
+        else:
+            s = re.sub(r"\blimit\s+\d+\s*,\s*\d+\b", "", s, flags=re.I)
+            s = re.sub(r"^\s*select\s+", f"SELECT TOP {n} ", s, flags=re.I)
+        s = re.sub(r"`([^`]+)`", r"[\1]", s)
+        return s
+
+    # 3) LIMIT n（常見）
+    m = re.search(r"\blimit\s+(\d+)\b", s, flags=re.I)
+    if m:
+        n = int(m.group(1))
+        s = re.sub(r"\blimit\s+\d+\b", "", s, flags=re.I)
+        s = re.sub(r"^\s*select\s+", f"SELECT TOP {n} ", s, flags=re.I)
+        s = re.sub(r"`([^`]+)`", r"[\1]", s)
+        return s
+
+    # 4) 僅處理反引號
+    s = re.sub(r"`([^`]+)`", r"[\1]", s)
+    return s
+
+
 # -------- 環境變數（從容器或 App Service 設定）--------
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 SQL_SERVER = os.getenv("SQL_SERVER")  # e.g. "text2sql-server.database.windows.net,1433"
