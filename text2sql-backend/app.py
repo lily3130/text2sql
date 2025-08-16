@@ -43,7 +43,10 @@ params = urllib.parse.quote_plus(
     f"SERVER={SQL_SERVER};DATABASE={SQL_DB};UID={SQL_USER};PWD={SQL_PASSWORD};"
     "Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30;"
 )
-engine = create_engine(f"mssql+pyodbc:///?odbc_connect={params}")
+engine = create_engine(
+    f"mssql+pyodbc:///?odbc_connect={params}",
+    fast_executemany=True,
+)
 
 # -------- LangChain：ChatOpenAI + SQLDatabaseChain --------
 if not OPENAI_API_KEY:
@@ -344,7 +347,7 @@ async def upload_file(
                     if_exists=if_exists,
                     index=False,
                     chunksize=1000,
-                    method="multi",
+                    # method="multi",
                 )
                 total_tables += 1
                 total_rows += len(df)
