@@ -1,11 +1,8 @@
-// components/QueryForm.jsx
 export default function QueryForm({
   query,
   setQuery,
   useEnrichment,
   setUseEnrichment,
-  tableWhitelist,
-  setTableWhitelist,
   loading,
   error,
   onSubmit,
@@ -24,7 +21,7 @@ export default function QueryForm({
         disabled={loading}
       />
 
-      {/* 新增：Enrichment 切換 & 白名單 */}
+      {/* 只保留 Enrichment 勾選；已移除 Table whitelist */}
       <div className="row" style={{ marginTop: 8, gap: 12, alignItems: 'center' }}>
         <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <input
@@ -35,16 +32,6 @@ export default function QueryForm({
           />
           Use Text Enrichment
         </label>
-
-        <input
-          type="text"
-          placeholder="Table whitelist (comma-separated), optional"
-          value={tableWhitelist}
-          onChange={(e) => setTableWhitelist(e.target.value)}
-          disabled={loading}
-          style={{ flex: 1 }}
-          aria-label="Table whitelist"
-        />
       </div>
 
       <div className="actions">

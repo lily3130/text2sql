@@ -9,7 +9,6 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL;
 export default function App() {
   const [query, setQuery] = useState('');
   const [useEnrichment, setUseEnrichment] = useState(false);
-  const [tableWhitelist, setTableWhitelist] = useState(''); // 逗號分隔的表名
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
   const [columns, setColumns] = useState([]);
@@ -27,26 +26,17 @@ export default function App() {
 
     setLoading(true);
     try {
-      // 先把 whitelist 轉陣列
-      const wl = (tableWhitelist || '')
-        .split(',')
-        .map(s => s.trim())
-        .filter(Boolean);
-
-      // 後端期望的頂層 JSON
       const payload = {
         query: query.trim(),
         use_enrichment: !!useEnrichment,
-        ...(wl.length ? { table_whitelist: wl } : {}),
       };
 
       const res = await fetch(`${API_BASE}/ask`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-        body: JSON.stringify(payload),   // <— 這裡改了！
+        body: JSON.stringify(payload),
       });
 
-      // 友善錯誤訊息（含 422 的 detail）
       const text = await res.text();
       let data; try { data = JSON.parse(text); } catch {}
       if (!res.ok || data?.ok === false) {
@@ -65,11 +55,14 @@ export default function App() {
       if (rs.length && cols.length >= 2) {
         const labelKey = cols[0];
         const valueKey = cols.find(c => typeof rs[0]?.[c] === 'number') || cols[1];
-        const top = rs.slice().sort((a,b)=> (Number(b?.[valueKey])||0)-(Number(a?.[valueKey])||0))
-                      .slice(0, Math.min(3, rs.length));
-        setSummary(`Top ${top.length} by ${valueKey}: ` +
-          top.map(r => `${r[labelKey]} (${r[valueKey]})`).join(', ') + '.');
-      } else {
+        const top = rs.slice()
+          .sort((a,b)=> (Number(b?.[valueKey])||0) - (Number(a?.[valueKey])||0))
+          .slice(0, Math.min(3, rs.length));
+        setSummary(
+          `Top ${top.length} by ${valueKey}: ` +
+          top.map(r => `${r[labelKey]} (${r[valueKey]})`).join(', ') + '.'
+        );
+      } else if (!rs.length) {
         setSummary('No rows returned.');
       }
     } catch (e) {
@@ -91,8 +84,6 @@ export default function App() {
         setQuery={setQuery}
         useEnrichment={useEnrichment}
         setUseEnrichment={setUseEnrichment}
-        tableWhitelist={tableWhitelist}
-        setTableWhitelist={setTableWhitelist}
         loading={loading}
         error={err}
         onSubmit={onSubmit}
@@ -102,11 +93,7 @@ export default function App() {
 
       {(rows.length || sql) && (
         <section className="grid">
-          <ResultPanel
-            columns={columns}
-            rows={rows}
-            summary={summary}
-          />
+          <ResultPanel columns={columns} rows={rows} summary={summary} />
           <SqlPanel sql={sql} />
         </section>
       )}

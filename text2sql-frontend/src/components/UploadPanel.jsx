@@ -1,11 +1,8 @@
-// components/UploadPanel.jsx
 import { useState } from 'react';
 
 export default function UploadPanel({ apiBase }) {
   const [file, setFile] = useState(null);
-  const [tableName, setTableName] = useState('');
   const [ifExists, setIfExists] = useState('replace'); // fail | replace | append
-  const [sheetName, setSheetName] = useState('');
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState('');
 
@@ -19,9 +16,7 @@ export default function UploadPanel({ apiBase }) {
     try {
       const form = new FormData();
       form.append('file', file);
-      if (tableName.trim()) form.append('table_name', tableName.trim());
-      if (sheetName.trim()) form.append('sheet_name', sheetName.trim());
-      form.append('if_exists', ifExists);
+      form.append('if_exists', ifExists); // 僅保留 if_exists
 
       const res = await fetch(`${apiBase}/upload`, { method: 'POST', body: form });
       const data = await res.json().catch(() => ({}));
@@ -43,20 +38,6 @@ export default function UploadPanel({ apiBase }) {
           type="file"
           accept=".csv,.xlsx,.xls"
           onChange={(e) => setFile(e.target.files?.[0] || null)}
-          disabled={loading}
-        />
-        <input
-          type="text"
-          placeholder="table_name (optional)"
-          value={tableName}
-          onChange={(e) => setTableName(e.target.value)}
-          disabled={loading}
-        />
-        <input
-          type="text"
-          placeholder="sheet_name (Excel only, optional)"
-          value={sheetName}
-          onChange={(e) => setSheetName(e.target.value)}
           disabled={loading}
         />
         <select value={ifExists} onChange={(e) => setIfExists(e.target.value)} disabled={loading}>
