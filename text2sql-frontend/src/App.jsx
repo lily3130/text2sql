@@ -5,6 +5,34 @@ import SqlPanel from './components/SqlPanel';
 import UploadPanel from './components/UploadPanel';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL;
+const isNumericCol = (col, rows) =>
+  rows.every(r => {
+    const v = r?.[col];
+    return v == null || v === '' || typeof v === 'number' || !Number.isNaN(Number(v));
+  });
+
+const pickDimAndMeasure = (cols, rows) => {
+  const L = s => (s || '').toLowerCase();
+  const aggRe = /(sum|total|avg|mean|count|min|max|value|amount|consumption|ktoe|kwh|gwh|mwh)$/i;
+  const dimRe = /(year|month|date|quarter|category|type|sector|region|fuel|name|country|city|area)$/i;
+
+  const numeric = cols.filter(c => isNumericCol(c, rows));
+  const aggCandidates = cols.filter(c => aggRe.test(L(c)));
+  const dimCandidates = cols.filter(c => !numeric.includes(c) || dimRe.test(L(c)));
+
+  const xKey = dimCandidates[0] || cols.find(c => !numeric.includes(c)) || cols[0];
+  const yKey =
+    aggCandidates.find(c => c !== xKey) ||
+    numeric.find(c => c !== xKey) ||
+    numeric[0] ||
+    cols.find(c => c !== xKey) ||
+    xKey;
+
+  return { xKey, yKey };
+};
+
+const fmtNum = n =>
+  Number.isFinite(Number(n)) ? Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 }) : '—';
 
 export default function App() {
   const [query, setQuery] = useState('');
@@ -53,18 +81,18 @@ export default function App() {
       setRows(rs);
 
       if (rs.length && cols.length >= 2) {
-        const labelKey = cols[0];
-        const valueKey = cols.find(c => typeof rs[0]?.[c] === 'number') || cols[1];
+        const { xKey, yKey } = pickDimAndMeasure(cols, rs);
         const top = rs.slice()
-          .sort((a,b)=> (Number(b?.[valueKey])||0) - (Number(a?.[valueKey])||0))
+          .sort((a, b) => (Number(b?.[yKey]) || 0) - (Number(a?.[yKey]) || 0))
           .slice(0, Math.min(3, rs.length));
         setSummary(
-          `Top ${top.length} by ${valueKey}: ` +
-          top.map(r => `${r[labelKey]} (${r[valueKey]})`).join(', ') + '.'
+          `Top ${top.length} by ${xKey}: ` +
+          top.map(r => `${r?.[xKey]} (${fmtNum(r?.[yKey])})`).join(', ') + '.'
         );
       } else if (!rs.length) {
         setSummary('No rows returned.');
       }
+
     } catch (e) {
       setErr(e.message || 'Request failed');
     } finally {
