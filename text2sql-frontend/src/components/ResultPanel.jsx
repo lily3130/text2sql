@@ -22,8 +22,6 @@ export default function ResultPanel({ columns = [], rows = [], summary = '' }) {
       {columns.length >= 2 && valueKey && (
         <BarChart
           data={formattedRows}
-          labelKey={labelKey}
-          valueKey={valueKey}
         />
       )}
 
