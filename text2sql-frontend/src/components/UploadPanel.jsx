@@ -1,8 +1,10 @@
 import { useState } from 'react';
 
+// 後端策略固定在這裡（如不想帶，刪掉下一段 append 即可）
+const IF_EXISTS_DEFAULT = 'fail';
+
 export default function UploadPanel({ apiBase }) {
   const [file, setFile] = useState(null);
-  const [ifExists, setIfExists] = useState('replace'); // fail | replace | append
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState('');
 
@@ -16,7 +18,7 @@ export default function UploadPanel({ apiBase }) {
     try {
       const form = new FormData();
       form.append('file', file);
-      form.append('if_exists', ifExists); // 僅保留 if_exists
+      form.append('if_exists', IF_EXISTS_DEFAULT); // 不想帶就刪掉這行
 
       const res = await fetch(`${apiBase}/upload`, { method: 'POST', body: form });
       const data = await res.json().catch(() => ({}));
@@ -31,7 +33,8 @@ export default function UploadPanel({ apiBase }) {
   };
 
   return (
-    <section className="card" style={{ marginTop: 16 }}>
+    // 移除 className="card" → 不會有外框
+    <section style={{ marginTop: 16 }}>
       <h3>Upload CSV/Excel to Azure SQL</h3>
       <div className="row" style={{ gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
         <input
@@ -40,11 +43,6 @@ export default function UploadPanel({ apiBase }) {
           onChange={(e) => setFile(e.target.files?.[0] || null)}
           disabled={loading}
         />
-        <select value={ifExists} onChange={(e) => setIfExists(e.target.value)} disabled={loading}>
-          <option value="replace">replace</option>
-          <option value="append">append</option>
-          <option value="fail">fail</option>
-        </select>
         <button onClick={onUpload} disabled={loading || !file}>
           {loading ? 'Uploading...' : 'Upload'}
         </button>
