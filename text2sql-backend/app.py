@@ -370,8 +370,7 @@ def sanitize_identifier(name: str) -> str:
 async def upload_file(
     file: UploadFile = File(...),
     table_name: Optional[str] = Form(None),
-    if_exists: Literal["fail", "replace", "append"] = Form("replace"),
-    sheet_name: Optional[str] = Form(None),  # 只對 Excel 有效；可指定單一 sheet
+    sheet_name: Optional[str] = Form(None),
 ):
     try:
         filename = file.filename or "upload"
@@ -428,9 +427,11 @@ async def upload_file(
                         df[c] = num
             return df
 
-        with engine.begin() as conn:  # begin(): 自動交易處理
+        with engine.begin() as conn:
             for tname, df in dfs.items():
                 t_final = sanitize_identifier(table_name) if table_name else tname
+
+                # 欄名清理
                 df.columns = (
                     df.columns.astype(str)
                     .str.strip()
@@ -438,34 +439,38 @@ async def upload_file(
                     .str.replace(r"[^\w]+", "_", regex=True)
                     .str.replace(r"(^_+|_+$)", "", regex=True)
                 )
-                CANON = {
-                    "eimh_year": "year",
-                    "yr": "year",
-                    # 可視需要擴充：kwh_per_acc/kwh_per_account、number_of_electricity_accounts 等
-                }
+
+                # year 等欄位標準化
+                CANON = {"eimh_year": "year", "yr": "year"}
                 rename_map = {}
                 for c in list(df.columns):
                     key = c.lower()
                     if key in CANON:
                         rename_map[c] = CANON[key]
-                    elif re.search(r"(?:^|_)year(?:_|$)", key):  # 任何含 year 的名稱
+                    elif re.search(r"(?:^|_)year(?:_|$)", key):
                         rename_map[c] = "year"
-
-                # ---- 刪除空列/空欄 ----
                 df.dropna(how="all", inplace=True)
                 df.dropna(axis=1, how="all", inplace=True)
                 df.rename(columns=rename_map, inplace=True)
+
+                # 數值智慧轉型
                 df = smart_cast_numeric(df)
+
+                # 3) 先 DROP（若存在）
+                safe_name = f"dbo.{t_final}"
+                conn.execute(
+                    text(f"IF OBJECT_ID(:obj, 'U') IS NOT NULL DROP TABLE {safe_name}"),
+                    {"obj": f"dbo.{t_final}"},
+                )
+
+                # 4) 永遠 replace
                 df.to_sql(
                     t_final,
                     conn,
-                    if_exists=if_exists,
+                    if_exists="replace",  # 固定覆蓋
                     index=False,
                     chunksize=1000,
-                    # method="multi",
                 )
-                total_tables += 1
-                total_rows += len(df)
 
         return {
             "ok": True,
