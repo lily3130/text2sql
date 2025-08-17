@@ -407,6 +407,7 @@ async def upload_file(
                 df.columns = (
                     df.columns.astype(str)
                     .str.strip()
+                    .str.lower()
                     .str.replace(r"[^\w]+", "_", regex=True)
                     .str.replace(r"(^_+|_+$)", "", regex=True)
                 )
@@ -423,6 +424,9 @@ async def upload_file(
                     elif re.search(r"(?:^|_)year(?:_|$)", key):  # 任何含 year 的名稱
                         rename_map[c] = "year"
 
+                # ---- 刪除空列/空欄 ----
+                df.dropna(how="all", inplace=True)
+                df.dropna(axis=1, how="all", inplace=True)
                 df.rename(columns=rename_map, inplace=True)
                 df.to_sql(
                     t_final,
