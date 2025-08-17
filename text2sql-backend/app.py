@@ -401,6 +401,33 @@ async def upload_file(
 
         # 欄名清理 + 寫入 SQL
         total_tables, total_rows = 0, 0
+
+        def smart_cast_numeric(df: pd.DataFrame) -> pd.DataFrame:
+            for c in df.columns:
+                if df[c].dtype == "object":
+                    s = df[c].astype(str).str.strip()
+                    # 常見異常值清掉/變成 NaN
+                    s = s.replace(
+                        {
+                            "-": None,
+                            "—": None,
+                            "–": None,
+                            "N.A.": None,
+                            "n.a.": None,
+                            "NA": None,
+                            "na": None,
+                            "": None,
+                        }
+                    )
+                    # 去除千分位逗號
+                    s = s.str.replace(",", "", regex=False)
+                    # 嘗試轉數值
+                    num = pd.to_numeric(s, errors="coerce")
+                    # 若 >70% 可轉成數字，就採用數字型；否則保留原字串
+                    if num.notna().mean() >= 0.7:
+                        df[c] = num
+            return df
+
         with engine.begin() as conn:  # begin(): 自動交易處理
             for tname, df in dfs.items():
                 t_final = sanitize_identifier(table_name) if table_name else tname
@@ -428,6 +455,7 @@ async def upload_file(
                 df.dropna(how="all", inplace=True)
                 df.dropna(axis=1, how="all", inplace=True)
                 df.rename(columns=rename_map, inplace=True)
+                df = smart_cast_numeric(df)
                 df.to_sql(
                     t_final,
                     conn,
