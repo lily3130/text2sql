@@ -1,12 +1,12 @@
 /* ===== Base ===== */
 :root {
-  --bg: #e6e6e6;
-  --panel: #b2b2b2;
-  --panel-2: #b2b2b2;
-  --text: #0f1115
+  --bg: #ffffff;        /* 純白背景 */
+  --panel: #e6e6e6;     /* 淺灰 panel */
+  --panel-2: #e6e6e6;   /* textarea / code block 也同步淺灰 */
+  --text: #0f1115;
   --muted: #9aa3af;
-  --border: rgba(255,255,255,0.12);
-  --shadow: 0 6px 30px rgba(0,0,0,0.4);
+  --border: rgba(0,0,0,0.12);
+  --shadow: 0 6px 30px rgba(0,0,0,0.1); /* 陰影稍微柔一點 */
   --radius: 16px;
 }
 
@@ -54,16 +54,8 @@ h3 { margin: 0 0 12px; font-size: 20px; }
 
 /* ===== Form ===== */
 textarea {
-  width: 100%;
-  resize: vertical;
   background: var(--panel-2);
   color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 12px;
-  font-size: 14px;
-  min-height: 90px;
-  outline: none;
 }
 
 .actions {
@@ -74,18 +66,20 @@ textarea {
 
 button {
   border: 1px solid var(--border);
-  background: #2a3140;
-  color: var(--text);
+  background: #9a9a9a;   /* 深灰按鈕 */
+  color: #ffffff;        /* 白字更明顯 */
   padding: 10px 14px;
   border-radius: 12px;
   cursor: pointer;
 }
+
 button:disabled {
   opacity: .6;
   cursor: not-allowed;
 }
+
 button:hover:not(:disabled) {
-  background: #343c50;
+  background: #7f7f7f;   /* hover 再深一點 */
 }
 
 /* ===== Messages ===== */
