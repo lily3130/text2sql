@@ -1,9 +1,9 @@
 /* ===== Base ===== */
 :root {
-  --bg: #0f1115;
-  --panel: #181b22;
-  --panel-2: #1f2430;
-  --text: #e6e6e6;
+  --bg: #e6e6e6;
+  --panel: #b2b2b2;
+  --panel-2: #b2b2b2;
+  --text: #0f1115
   --muted: #9aa3af;
   --border: rgba(255,255,255,0.12);
   --shadow: 0 6px 30px rgba(0,0,0,0.4);

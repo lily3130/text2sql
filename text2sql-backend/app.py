@@ -456,7 +456,7 @@ async def upload_file(
                 # 數值智慧轉型
                 df = smart_cast_numeric(df)
 
-                # 3) 先 DROP（若存在）
+                # 3) 先 DROP
                 safe_name = f"dbo.{t_final}"
                 conn.execute(
                     text(f"IF OBJECT_ID(:obj, 'U') IS NOT NULL DROP TABLE {safe_name}"),
