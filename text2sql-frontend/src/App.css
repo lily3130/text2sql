@@ -1,12 +1,12 @@
 /* ===== Base ===== */
 :root {
-  --bg: #ffffff;        /* 純白背景 */
-  --panel: #e6e6e6;     /* 淺灰 panel */
-  --panel-2: #e6e6e6;   /* textarea / code block 也同步淺灰 */
-  --text: #0f1115;
+  --bg: #ffffff;          /* 純白背景 */
+  --panel: #eeeeee;       /* 淺灰 panel */
+  --panel-2: #b2b2b2;     /* 保持 textbox/程式區原本的灰色 */
+  --text: #0f1115;        /* ← 原本少分號，補上 */
   --muted: #9aa3af;
-  --border: rgba(0,0,0,0.12);
-  --shadow: 0 6px 30px rgba(0,0,0,0.1); /* 陰影稍微柔一點 */
+  --border: rgba(0,0,0,0.12);  /* 白背景下的淡黑邊框 */
+  --shadow: 0 6px 30px rgba(0,0,0,0.08);
   --radius: 16px;
 }
 
@@ -54,8 +54,18 @@ h3 { margin: 0 0 12px; font-size: 20px; }
 
 /* ===== Form ===== */
 textarea {
-  background: var(--panel-2);
-  color: var(--text);
+  display: block;           /* 確保獨佔一行 */
+  width: 100%;              /* 填滿整個父容器 */
+  resize: vertical;
+  background: #2a2d35;      /* 深灰 */
+  color: #ffffff;           /* 白字 */
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  font-size: 14px;
+  min-height: 90px;
+  outline: none;
+  box-sizing: border-box;   /* 避免 padding 擠壓寬度 */
 }
 
 .actions {
@@ -66,8 +76,8 @@ textarea {
 
 button {
   border: 1px solid var(--border);
-  background: #9a9a9a;   /* 深灰按鈕 */
-  color: #ffffff;        /* 白字更明顯 */
+  background: #9a9a9a;
+  color: #ffffff;
   padding: 10px 14px;
   border-radius: 12px;
   cursor: pointer;
@@ -78,9 +88,7 @@ button:disabled {
   cursor: not-allowed;
 }
 
-button:hover:not(:disabled) {
-  background: #7f7f7f;   /* hover 再深一點 */
-}
+button:hover:not(:disabled) { background: #7f7f7f; }
 
 /* ===== Messages ===== */
 .error {
