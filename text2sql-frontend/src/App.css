@@ -57,7 +57,7 @@ textarea {
   display: block;           /* 確保獨佔一行 */
   width: 100%;              /* 填滿整個父容器 */
   resize: vertical;
-  background: #2a2d35;      /* 深灰 */
+  background: #b2b2b2;      /* 深灰 */
   color: #ffffff;           /* 白字 */
   border: 1px solid var(--border);
   border-radius: 12px;
