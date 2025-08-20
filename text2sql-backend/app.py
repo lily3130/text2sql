@@ -29,6 +29,27 @@ def strip_sql_code_fences(s: str) -> str:
     return s.strip()
 
 
+def relax_numeric_casts(sql: str) -> str:
+    """
+    將容易出錯的 CAST/CONVERT 改成 TRY_CONVERT / TRY_CAST，
+    以避免 'Error converting data type varchar to float.' 之類錯誤。
+    """
+    if not isinstance(sql, str):
+        return sql
+    s = sql
+
+    # CAST(x AS FLOAT/DECIMAL/INT/NUMERIC) -> TRY_CAST(x AS ...)
+    s = re.sub(r"\bCAST\s*\(", "TRY_CAST(", s, flags=re.I)
+
+    # CONVERT(FLOAT/DECIMAL/INT/NUMERIC, x) -> TRY_CONVERT(...)
+    s = re.sub(r"\bCONVERT\s*\(", "TRY_CONVERT(", s, flags=re.I)
+
+    # 也順手把 double precision 一律視為 FLOAT
+    s = re.sub(r"\bDOUBLE\s+PRECISION\b", "FLOAT", s, flags=re.I)
+
+    return s
+
+
 def normalize_sql_for_mssql(sql: str) -> str:
     """
     - LIMIT n OFFSET m   -> OFFSET m ROWS FETCH NEXT n ROWS ONLY (需已有 ORDER BY，否則退回 TOP n)
@@ -317,6 +338,8 @@ def ask(body: AskIn):
 
         # 把 LIMIT/反引號 轉成 SQL Server 可用語法
         sql = normalize_sql_for_mssql(sql)
+        # <<< 新增：把 CAST/CONVERT 換成 TRY_*，避免 varchar -> float 轉型爆炸
+        sql = relax_numeric_casts(sql)
 
         # 3) 簡單阻擋破壞性語句
         lowered = f" {sql.lower()} "
@@ -372,64 +395,83 @@ async def upload_file(
     table_name: Optional[str] = Form(None),
     sheet_name: Optional[str] = Form(None),
 ):
+    """
+    上傳 CSV / Excel 並寫入 Azure SQL
+    - 一律覆蓋 (replace)
+    - 欄名清理、year 正規化、數值智慧轉型
+    - 回傳：匯入的表名清單 + 表數 + 總列數
+    """
     try:
-        filename = file.filename or "upload"
-        ext = filename.lower().split(".")[-1]
+        filename = (file.filename or "upload").strip()
+        ext = filename.lower().rsplit(".", 1)[-1] if "." in filename else ""
         content = await file.read()
         bio = io.BytesIO(content)
 
-        # 讀檔到 DataFrame(s)
+        # 1) 讀檔 → dict[str, DataFrame]
         dfs: Dict[str, pd.DataFrame] = {}
 
         if ext in ("csv", "txt"):
-            df = pd.read_csv(bio)
-            dfs[table_name or sanitize_identifier(filename.rsplit(".", 1)[0])] = df
+            # 先以字串讀，避免一開始就轉成數值造成資訊遺失
+            df = pd.read_csv(bio, dtype=str, keep_default_na=False, na_values=[""])
+            # 用檔名（去副檔名）當表名，或是外部傳入的 table_name
+            tname = table_name or sanitize_identifier(filename.rsplit(".", 1)[0])
+            dfs[tname] = df
+
         elif ext in ("xlsx", "xls"):
             xls = pd.ExcelFile(bio)
-            target_sheets = xls.sheet_names if not sheet_name else [sheet_name]
-            for sh in target_sheets:
+            targets = xls.sheet_names if not sheet_name else [sheet_name]
+            for sh in targets:
                 if "content" in sh.lower():
-                    # 跟你線下邏輯一致：跳過非資料 sheet
                     continue
-                df = pd.read_excel(xls, sheet_name=sh)
+                df = pd.read_excel(xls, sheet_name=sh, dtype=str)
                 dfs[sanitize_identifier(sh)] = df
+
+            # 若強制指定了 table_name，且只有一張表 → 用這個名字覆蓋
+            if table_name and len(dfs) == 1:
+                only_key = next(iter(dfs.keys()))
+                dfs = {sanitize_identifier(table_name): dfs[only_key]}
         else:
             raise HTTPException(
                 status_code=400, detail="Only CSV/XLSX/XLS are supported"
             )
 
-        # 欄名清理 + 寫入 SQL
-        total_tables, total_rows = 0, 0
+        if not dfs:
+            raise HTTPException(
+                status_code=400, detail="No worksheet or data found to import"
+            )
 
+        # 2) 欄名/資料清理
         def smart_cast_numeric(df: pd.DataFrame) -> pd.DataFrame:
             for c in df.columns:
-                if df[c].dtype == "object":
-                    s = df[c].astype(str).str.strip()
-                    # 常見異常值清掉/變成 NaN
-                    s = s.replace(
-                        {
-                            "-": None,
-                            "—": None,
-                            "–": None,
-                            "N.A.": None,
-                            "n.a.": None,
-                            "NA": None,
-                            "na": None,
-                            "": None,
-                        }
-                    )
-                    # 去除千分位逗號
-                    s = s.str.replace(",", "", regex=False)
-                    # 嘗試轉數值
-                    num = pd.to_numeric(s, errors="coerce")
-                    # 若 >70% 可轉成數字，就採用數字型；否則保留原字串
-                    if num.notna().mean() >= 0.7:
-                        df[c] = num
+                s = df[c].astype(str).str.strip()
+                s = s.replace(
+                    {
+                        "-": None,
+                        "—": None,
+                        "–": None,
+                        "N.A.": None,
+                        "n.a.": None,
+                        "NA": None,
+                        "na": None,
+                        "": None,
+                    }
+                )
+                s = s.str.replace(",", "", regex=False)  # 去千分位
+                num = pd.to_numeric(s, errors="coerce")
+                # > 60% 能轉才採用數值型，否則保留原字串
+                if num.notna().mean() >= 0.6:
+                    df[c] = num
+                else:
+                    df[c] = s.fillna("")  # 維持乾淨字串
             return df
 
         with engine.begin() as conn:
             for tname, df in dfs.items():
-                t_final = sanitize_identifier(table_name) if table_name else tname
+                t_final = (
+                    sanitize_identifier(table_name)
+                    if table_name and len(dfs) == 1
+                    else sanitize_identifier(tname)
+                )
 
                 # 欄名清理
                 df.columns = (
@@ -440,7 +482,7 @@ async def upload_file(
                     .str.replace(r"(^_+|_+$)", "", regex=True)
                 )
 
-                # year 等欄位標準化
+                # year 欄位正規化
                 CANON = {"eimh_year": "year", "yr": "year"}
                 rename_map = {}
                 for c in list(df.columns):
@@ -449,38 +491,42 @@ async def upload_file(
                         rename_map[c] = CANON[key]
                     elif re.search(r"(?:^|_)year(?:_|$)", key):
                         rename_map[c] = "year"
+                df.rename(columns=rename_map, inplace=True)
+
+                # 丟掉全空列 / 全空欄
                 df.dropna(how="all", inplace=True)
                 df.dropna(axis=1, how="all", inplace=True)
-                df.rename(columns=rename_map, inplace=True)
 
                 # 數值智慧轉型
                 df = smart_cast_numeric(df)
 
-                # 3) 先 DROP
+                # 3) 先 DROP（保險），再 replace
                 safe_name = f"dbo.{t_final}"
                 conn.execute(
                     text(f"IF OBJECT_ID(:obj, 'U') IS NOT NULL DROP TABLE {safe_name}"),
-                    {"obj": f"dbo.{t_final}"},
+                    {"obj": safe_name},
                 )
 
-                # 4) 永遠 replace
                 df.to_sql(
                     t_final,
                     conn,
-                    if_exists="replace",  # 固定覆蓋
+                    if_exists="replace",  # 永遠覆蓋
                     index=False,
                     chunksize=1000,
+                    schema="dbo",
                 )
 
+        # 3) 回傳統計
+        total_tables = len(dfs)
+        total_rows = int(sum(len(df) for df in dfs.values()))
         return {
             "ok": True,
             "message": f"Imported {total_tables} table(s), {total_rows} row(s).",
             "tables": (
                 list(dfs.keys())
-                if not table_name
+                if not (table_name and len(dfs) == 1)
                 else [sanitize_identifier(table_name)]
             ),
-            "if_exists": if_exists,
         }
 
     except HTTPException:
