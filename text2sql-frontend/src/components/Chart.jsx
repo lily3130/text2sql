@@ -1,5 +1,10 @@
 // components/BarChart.jsx
 
+// 顏色常數
+const AXIS_COLOR = "#000";
+const TEXT_COLOR = "#000";
+const GRID_COLOR = "#000"; // 若之後要加格線可用
+
 // 判斷欄位型別
 const isNumericCol = (col, rows) =>
   rows.every(r => {
@@ -58,7 +63,6 @@ export default function BarChart({
 }) {
   if (!data?.length) return null;
 
-  // 自動挑 x/y（父層有傳就優先用）
   const keys = Object.keys(data[0] || {});
   let labelKey = propLabelKey;
   let valueKey = propValueKey;
@@ -68,7 +72,6 @@ export default function BarChart({
     valueKey = valueKey || picked.yKey;
   }
 
-  // 依 y 值大到小排序（讓 Top-N 看起來合理）
   const sorted = [...data].sort(
     (a, b) => (Number(b?.[valueKey]) || 0) - (Number(a?.[valueKey]) || 0)
   );
@@ -87,7 +90,7 @@ export default function BarChart({
         x={-(height / 2)}
         y={16}
         fontSize="12"
-        fill="white"
+        fill={TEXT_COLOR}
         textAnchor="middle"
         transform="rotate(-90)"
       >
@@ -96,13 +99,13 @@ export default function BarChart({
       </text>
 
       {/* x 軸標題 */}
-      <text x={width / 2} y={height - 6} textAnchor="middle" fontSize="12" fill="white">
+      <text x={width / 2} y={height - 6} textAnchor="middle" fontSize="12" fill={TEXT_COLOR}>
         {prettyLabel(labelKey)}
       </text>
 
-      {/* y 軸 & x 軸 */}
-      <line x1={margin - 6} y1={margin} x2={margin - 6} y2={height - margin} stroke="white" />
-      <line x1={margin - 6} y1={height - margin} x2={width - margin + 6} y2={height - margin} stroke="white" />
+      {/* y 軸 & x 軸（黑色） */}
+      <line x1={margin - 6} y1={margin} x2={margin - 6} y2={height - margin} stroke={AXIS_COLOR} />
+      <line x1={margin - 6} y1={height - margin} x2={width - margin + 6} y2={height - margin} stroke={AXIS_COLOR} />
 
       {sorted.map((d, i) => {
         const v = Number(d?.[valueKey]) || 0;
@@ -115,11 +118,11 @@ export default function BarChart({
               <title>{`${d?.[labelKey]}: ${fmtNumber(v)}`}</title>
             </rect>
             {/* x 軸標籤 */}
-            <text x={x + barW / 2} y={height - margin + 14} textAnchor="middle" fontSize="11" fill="white">
+            <text x={x + barW / 2} y={height - margin + 14} textAnchor="middle" fontSize="11" fill={TEXT_COLOR}>
               {String(d?.[labelKey])}
             </text>
             {/* 數值 */}
-            <text x={x + barW / 2} y={Math.min(y - 6, height - margin - 6)} textAnchor="middle" fontSize="11" fill="white">
+            <text x={x + barW / 2} y={Math.min(y - 6, height - margin - 6)} textAnchor="middle" fontSize="11" fill={TEXT_COLOR}>
               {fmtNumber(v)}
             </text>
           </g>
