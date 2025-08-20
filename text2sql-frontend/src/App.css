@@ -1,6 +1,6 @@
 /* ===== Base ===== */
 :root {
-  --bg: #ffffff;          /* 純白背景 */
+  --bg: #f3e3b6;          /* 純白背景 */
   --panel: #eeeeee;       /* 淺灰 panel */
   --panel-2: #b2b2b2;     /* 保持 textbox/程式區原本的灰色 */
   --text: #0f1115;        /* ← 原本少分號，補上 */
